@@ -659,7 +659,8 @@ class BatchGenerator:
                         box.append(item_dict[item])
                     boxes.append(box)
                 self.labels.append(boxes)
-
+        # print(len(self.labels))
+        # print(len(self.filenames))
         if ret:
             return self.filenames, self.labels, self.image_ids
 

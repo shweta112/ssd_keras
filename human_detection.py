@@ -3,7 +3,7 @@ Author: Shweta Mahajan
 '''
 
 from keras.optimizers import Adam
-from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, ReduceLROnPlateau, TensorBoard
+from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 from keras import backend as K
 from keras.models import load_model
 from math import ceil
@@ -22,19 +22,19 @@ from data_generator.ssd_batch_generator import BatchGenerator
 
 # Define a learning rate schedule.
 def lr_schedule(epoch):
-    if epoch <= 100: return 0.001
+    if epoch <= 100: return 0.0001
     else: return 0.0001
 
 
 img_height = 300 # Height of the input images
-img_width = 300 # Width of the input images
+img_width = 480 # Width of the input images
 img_channels = 3 # Number of color channels of the input images
-subtract_mean = [123, 117, 104] # The per-channel mean of the images in the dataset
-swap_channels = True # The color channel order in the original SSD is BGR
+subtract_mean = None # [123, 117, 104] # The per-channel mean of the images in the dataset
+swap_channels = False # True # The color channel order in the original SSD is BGR
 n_classes = 1 # Number of positive classes, e.g. 20 for Pascal VOC, 80 for MS COCO
 scales_voc = [0.1, 0.2, 0.37, 0.54, 0.71, 0.88, 1.05] # The anchor box scaling factors used in the original SSD300 for the Pascal VOC datasets
 scales_coco = [0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05] # The anchor box scaling factors used in the original SSD300 for the MS COCO datasets
-scales = scales_voc
+scales = scales_coco
 aspect_ratios = [[1.0, 2.0, 0.5],
                  [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
                  [1.0, 2.0, 0.5, 3.0, 1.0/3.0],
@@ -80,7 +80,7 @@ adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
 
 ssd_loss = SSDLoss(neg_pos_ratio=3, n_neg_min=0, alpha=1.0)
 
-model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
+model.compile(optimizer=adam, loss=ssd_loss.compute_loss, metrics=['accuracy'])
 
 
 ## Data generators
@@ -90,12 +90,12 @@ val_dataset = BatchGenerator(box_output_format=['class_id', 'xmin', 'ymin', 'xma
 
 # 2: Parse the image and label lists for the training and validation datasets. This can take a while.
 # The directories that contain the images.
-HD_test_images_dir = '../../Human_Detection/images/2017-08-16/16bit'
+HD_val_images_dir = '../../Human_Detection/images/2017-08-16/16bit'
 HD_08_29_images_dir = '../../Human_Detection/images/2017-08-29/16bit'
 HD_08_30_images_dir = '../../Human_Detection/images/2017-08-30/16bit'
 
 # The filenames that contain the annotations.
-HD_test_annotation_filename = '../rnd-human-detection/annotations/hd_20170816.json'
+HD_val_annotation_filename = '../rnd-human-detection/annotations/hd_20170816.json'
 HD_08_29_annotation_filename = '../rnd-human-detection/annotations/hd_20170829.json'
 HD_08_30_annotation_filename = '../rnd-human-detection/annotations/hd_20170830.json'
 
@@ -105,8 +105,8 @@ train_dataset.parse_custom(images_dirs=[HD_08_29_images_dir,
                                                   HD_08_30_annotation_filename],
                            ret=False)
 
-val_dataset.parse_custom(images_dirs=[HD_test_images_dir],
-                         annotations_filenames=[HD_test_annotation_filename],
+val_dataset.parse_custom(images_dirs=[HD_val_images_dir],
+                         annotations_filenames=[HD_val_annotation_filename],
                          ret=False)
 
 # 3: Instantiate an encoder that can encode ground truth labels into the format needed by the SSD loss function.
@@ -158,7 +158,8 @@ train_generator = train_dataset.generate(batch_size=batch_size,
                                          resize=False,
                                          gray=False,
                                          limit_boxes=True, # While the anchor boxes are not being clipped, the ground truth boxes should be
-                                         include_thresh=0.4)
+                                         include_thresh=0.4,
+                                         keep_images_without_gt=True)
 
 val_generator = val_dataset.generate(batch_size=batch_size,
                                      shuffle=True,
@@ -177,37 +178,55 @@ val_generator = val_dataset.generate(batch_size=batch_size,
                                      resize=False,
                                      gray=False,
                                      limit_boxes=True,
-                                     include_thresh=0.4)
+                                     include_thresh=0.4,
+                                     keep_images_without_gt=True)
 
 # Get the number of samples in the training and validations datasets to compute the epoch lengths below.
 n_train_samples = train_dataset.get_n_samples()
 n_val_samples   = val_dataset.get_n_samples()
 
-epochs = 10
+# print(n_train_samples)
+# print(n_val_samples)
+
+epochs = 70
 
 history = model.fit_generator(generator = train_generator,
                               steps_per_epoch = ceil(n_train_samples/batch_size),
                               epochs = epochs,
-                              callbacks = [ModelCheckpoint('ssd300_weights_epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
-                                                           monitor='val_loss',
+                              verbose=1,
+                              callbacks = [ModelCheckpoint('ssd_weights_epoch-{epoch:02d}_val_acc-{val_acc:.4f}_val_loss-{val_loss:.4f}.h5',
+                                                           monitor='val_acc',
                                                            verbose=1,
                                                            save_best_only=True,
                                                            save_weights_only=True,
                                                            mode='auto',
                                                            period=1),
-                                           LearningRateScheduler(lr_schedule),
-                                           EarlyStopping(monitor='val_loss',
+                                           EarlyStopping(monitor='val_acc',
                                                          min_delta=0.001,
-                                                         patience=2)],
+                                                         patience=20),
+                                           LearningRateScheduler(lr_schedule),
+                                           CSVLogger('training.log', append=True),
+                                           ReduceLROnPlateau(monitor='val_acc', factor=0.8,
+                                                             patience=100, min_lr=0, verbose=1),
+                                           TensorBoard(log_dir='./logs', histogram_freq=0, batch_size=32,
+                                                       write_graph=True, write_grads=False, write_images=True,
+                                                       embeddings_freq=0, embeddings_layer_names=None,
+                                                       embeddings_metadata=None)],
                               validation_data = val_generator,
                               validation_steps = ceil(n_val_samples/batch_size))
 
-#       Do the same in the `ModelCheckpoint` callback above.
-model_name = 'ssd300_hd_v1'
-model.save('{}.h5'.format(model_name))
-model.save_weights('{}_weights.h5'.format(model_name))
 
-print()
-print("Model saved under {}.h5".format(model_name))
-print("Weights also saved separately under {}_weights.h5".format(model_name))
-print()
+#       Do the same in the `ModelCheckpoint` callback above.
+# model_name = 'ssd300_hd_v1'
+# model.save('{}.h5'.format(model_name))
+# model.save_weights('{}_weights.h5'.format(model_name))
+#
+# print()
+# print("Model saved under {}.h5".format(model_name))
+# print("Weights also saved separately under {}_weights.h5".format(model_name))
+# print()
+
+plt.figure(figsize=(20,12))
+plt.plot(history.history['loss'], label='loss')
+plt.plot(history.history['val_loss'], label='val_loss')
+plt.legend(loc='upper right', prop={'size': 24})
