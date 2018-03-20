@@ -5,25 +5,21 @@ Author: Shweta Mahajan
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 from keras import backend as K
-from keras.models import load_model
+
 from math import ceil
 import numpy as np
 from matplotlib import pyplot as plt
 
 from models.keras_ssd300 import ssd_300
 from keras_loss_function.keras_ssd_loss import SSDLoss
-from keras_layers.keras_layer_AnchorBoxes import AnchorBoxes
-from keras_layers.keras_layer_DecodeDetections import DecodeDetections
-from keras_layers.keras_layer_DecodeDetections2 import DecodeDetections2
-from keras_layers.keras_layer_L2Normalization import L2Normalization
 from ssd_box_utils.ssd_box_encode_decode_utils import SSDBoxEncoder, decode_y, decode_y2
 from data_generator.ssd_batch_generator import BatchGenerator
 
 
 # Define a learning rate schedule.
 def lr_schedule(epoch):
-    if epoch <= 100: return 0.0001
-    else: return 0.0001
+    if epoch <= 50: return 0.0001
+    else: return 0.00001
 
 
 img_height = 300 # Height of the input images
@@ -188,7 +184,7 @@ n_val_samples   = val_dataset.get_n_samples()
 # print(n_train_samples)
 # print(n_val_samples)
 
-epochs = 70
+epochs = 100
 
 history = model.fit_generator(generator = train_generator,
                               steps_per_epoch = ceil(n_train_samples/batch_size),
@@ -198,12 +194,12 @@ history = model.fit_generator(generator = train_generator,
                                                            monitor='val_acc',
                                                            verbose=1,
                                                            save_best_only=True,
-                                                           save_weights_only=True,
+                                                           save_weights_only=False,
                                                            mode='auto',
                                                            period=1),
                                            EarlyStopping(monitor='val_acc',
                                                          min_delta=0.001,
-                                                         patience=20),
+                                                         patience=101),
                                            LearningRateScheduler(lr_schedule),
                                            CSVLogger('training.log', append=True),
                                            ReduceLROnPlateau(monitor='val_acc', factor=0.8,
@@ -230,3 +226,4 @@ plt.figure(figsize=(20,12))
 plt.plot(history.history['loss'], label='loss')
 plt.plot(history.history['val_loss'], label='val_loss')
 plt.legend(loc='upper right', prop={'size': 24})
+plt.show(block=True)
