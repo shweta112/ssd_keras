@@ -18,8 +18,9 @@ from data_generator.ssd_batch_generator import BatchGenerator
 
 # Define a learning rate schedule.
 def lr_schedule(epoch):
-    if epoch <= 50: return 0.0001
-    else: return 0.00001
+    if epoch <= 100: return 0.0001
+    elif epoch <= 160: return 0.00001
+    else: return 0.000001
 
 
 img_height = 300 # Height of the input images
@@ -142,8 +143,8 @@ train_generator = train_dataset.generate(batch_size=batch_size,
                                          train=True,
                                          ssd_box_encoder=ssd_box_encoder,
                                          convert_to_3_channels=True,
-                                         equalize=False,
-                                         brightness=False,
+                                         equalize=True,
+                                         brightness=(0.1, 5.0, 0.5),
                                          flip=0.5,
                                          translate=False,
                                          scale=False,
@@ -184,13 +185,13 @@ n_val_samples   = val_dataset.get_n_samples()
 # print(n_train_samples)
 # print(n_val_samples)
 
-epochs = 100
+epochs = 20
 
 history = model.fit_generator(generator = train_generator,
                               steps_per_epoch = ceil(n_train_samples/batch_size),
                               epochs = epochs,
                               verbose=1,
-                              callbacks = [ModelCheckpoint('ssd_weights_epoch-{epoch:02d}_val_acc-{val_acc:.4f}_val_loss-{val_loss:.4f}.h5',
+                              callbacks = [ModelCheckpoint('weights_COCO4_27-03/ssd_weights_epoch-{epoch:02d}_val_acc-{val_acc:.4f}_val_loss-{val_loss:.4f}.h5',
                                                            monitor='val_acc',
                                                            verbose=1,
                                                            save_best_only=True,
@@ -199,11 +200,11 @@ history = model.fit_generator(generator = train_generator,
                                                            period=1),
                                            EarlyStopping(monitor='val_acc',
                                                          min_delta=0.001,
-                                                         patience=101),
+                                                         patience=201),
                                            LearningRateScheduler(lr_schedule),
                                            CSVLogger('training.log', append=True),
                                            ReduceLROnPlateau(monitor='val_acc', factor=0.8,
-                                                             patience=100, min_lr=0, verbose=1),
+                                                             patience=200, min_lr=0, verbose=1),
                                            TensorBoard(log_dir='./logs', histogram_freq=0, batch_size=32,
                                                        write_graph=True, write_grads=False, write_images=True,
                                                        embeddings_freq=0, embeddings_layer_names=None,
@@ -225,5 +226,7 @@ history = model.fit_generator(generator = train_generator,
 plt.figure(figsize=(20,12))
 plt.plot(history.history['loss'], label='loss')
 plt.plot(history.history['val_loss'], label='val_loss')
+plt.plot(history.history['acc'], label='acc')
+plt.plot(history.history['val_acc'], label='val_acc')
 plt.legend(loc='upper right', prop={'size': 24})
 plt.show(block=True)

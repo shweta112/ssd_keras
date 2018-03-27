@@ -104,6 +104,8 @@ def _brightness(image, min=0.5, max=2.0):
 
     Protected against overflow.
     '''
+
+    '''
     hsv = cv2.cvtColor(image,cv2.COLOR_RGB2HSV)
 
     random_br = np.random.uniform(min,max)
@@ -116,6 +118,16 @@ def _brightness(image, min=0.5, max=2.0):
     hsv[:,:,2] = v_channel
 
     return cv2.cvtColor(hsv,cv2.COLOR_HSV2RGB)
+    '''
+    ycc = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
+
+    random_br = np.random.uniform(min, max)
+    mask = ycc[0, :, :] * random_br > (2 ** 16 - 1)
+    y_channel = np.where(mask, (2 ** 16 - 1), ycc[0, :, :] * random_br)
+    ycc[0, :, :] = y_channel
+
+    return cv2.cvtColor(ycc, cv2.COLOR_YCrCb2RGB)
+
 
 def histogram_eq(image):
     '''
@@ -126,11 +138,16 @@ def histogram_eq(image):
 
     image1 = np.copy(image)
 
+    '''
     image1 = cv2.cvtColor(image1, cv2.COLOR_RGB2HSV)
 
     image1[:,:,2] = cv2.equalizeHist(image1[:,:,2])
 
     image1 = cv2.cvtColor(image1, cv2.COLOR_HSV2RGB)
+    '''
+    cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(image1[0, :, :])
+    cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(image1[:, 1, :])
+    cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(image1[:, :, 2])
 
     return image1
 
