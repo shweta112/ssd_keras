@@ -23,8 +23,8 @@ def lr_schedule(epoch):
     else: return 0.000001
 
 
-img_height = 300 # Height of the input images
-img_width = 480 # Width of the input images
+img_height = 480 # Height of the input images
+img_width = 640 # Width of the input images
 img_channels = 3 # Number of color channels of the input images
 subtract_mean = None # [123, 117, 104] # The per-channel mean of the images in the dataset
 swap_channels = False # True # The color channel order in the original SSD is BGR
@@ -135,7 +135,7 @@ ssd_box_encoder = SSDBoxEncoder(img_height=img_height,
                                 normalize_coords=normalize_coords)
 
 # 4: Set the batch size.
-batch_size = 16 # Change the batch size if you like, or if you run into memory issues with your GPU.
+batch_size = 8 # Change the batch size if you like, or if you run into memory issues with your GPU.
 
 # 5: Set the image processing / data augmentation options and create generator handles.
 train_generator = train_dataset.generate(batch_size=batch_size,
@@ -148,14 +148,14 @@ train_generator = train_dataset.generate(batch_size=batch_size,
                                          flip=0.5,
                                          translate=False,
                                          scale=False,
-                                         max_crop_and_resize=(img_height, img_width, 1, 3), # This one is important because the Pascal VOC images vary in size
-                                         random_pad_and_resize=(img_height, img_width, 1, 3, 0.5), # This one is important because the Pascal VOC images vary in size
+                                         max_crop_and_resize=False, #(img_height, img_width, 1, 3), # This one is important because the Pascal VOC images vary in size
+                                         random_pad_and_resize=False, #(img_height, img_width, 1, 3, 0.5), # This one is important because the Pascal VOC images vary in size
                                          random_crop=False,
                                          crop=False,
                                          resize=False,
                                          gray=False,
                                          limit_boxes=True, # While the anchor boxes are not being clipped, the ground truth boxes should be
-                                         include_thresh=0.4,
+                                         include_thresh=0.2,
                                          keep_images_without_gt=True)
 
 val_generator = val_dataset.generate(batch_size=batch_size,
@@ -168,22 +168,19 @@ val_generator = val_dataset.generate(batch_size=batch_size,
                                      flip=False,
                                      translate=False,
                                      scale=False,
-                                     max_crop_and_resize=(img_height, img_width, 1, 3), # This one is important because the Pascal VOC images vary in size
-                                     random_pad_and_resize=(img_height, img_width, 1, 3, 0.5), # This one is important because the Pascal VOC images vary in size
+                                     max_crop_and_resize=False, #(img_height, img_width, 1, 3), # This one is important because the Pascal VOC images vary in size
+                                     random_pad_and_resize=False, #(img_height, img_width, 1, 3, 0.5), # This one is important because the Pascal VOC images vary in size
                                      random_crop=False,
                                      crop=False,
                                      resize=False,
                                      gray=False,
                                      limit_boxes=True,
-                                     include_thresh=0.4,
+                                     include_thresh=0.2,
                                      keep_images_without_gt=True)
 
 # Get the number of samples in the training and validations datasets to compute the epoch lengths below.
 n_train_samples = train_dataset.get_n_samples()
 n_val_samples   = val_dataset.get_n_samples()
-
-# print(n_train_samples)
-# print(n_val_samples)
 
 epochs = 20
 
@@ -191,7 +188,7 @@ history = model.fit_generator(generator = train_generator,
                               steps_per_epoch = ceil(n_train_samples/batch_size),
                               epochs = epochs,
                               verbose=1,
-                              callbacks = [ModelCheckpoint('weights_COCO4_27-03/ssd_weights_epoch-{epoch:02d}_val_acc-{val_acc:.4f}_val_loss-{val_loss:.4f}.h5',
+                              callbacks = [ModelCheckpoint('weights_COCO4_29-03_480x640/ssd_weights_epoch-{epoch:02d}_val_acc-{val_acc:.4f}_val_loss-{val_loss:.4f}.h5',
                                                            monitor='val_acc',
                                                            verbose=1,
                                                            save_best_only=True,
@@ -205,28 +202,25 @@ history = model.fit_generator(generator = train_generator,
                                            CSVLogger('training.log', append=True),
                                            ReduceLROnPlateau(monitor='val_acc', factor=0.8,
                                                              patience=200, min_lr=0, verbose=1),
-                                           TensorBoard(log_dir='./logs', histogram_freq=0, batch_size=32,
+                                           TensorBoard(log_dir='./logs/SSD480x640_29-03/', histogram_freq=0, batch_size=32,
                                                        write_graph=True, write_grads=False, write_images=True,
                                                        embeddings_freq=0, embeddings_layer_names=None,
                                                        embeddings_metadata=None)],
                               validation_data = val_generator,
                               validation_steps = ceil(n_val_samples/batch_size))
 
-
-#       Do the same in the `ModelCheckpoint` callback above.
-# model_name = 'ssd300_hd_v1'
-# model.save('{}.h5'.format(model_name))
-# model.save_weights('{}_weights.h5'.format(model_name))
-#
-# print()
-# print("Model saved under {}.h5".format(model_name))
-# print("Weights also saved separately under {}_weights.h5".format(model_name))
-# print()
-
 plt.figure(figsize=(20,12))
+plt.legend(loc='upper right', prop={'size': 24})
 plt.plot(history.history['loss'], label='loss')
 plt.plot(history.history['val_loss'], label='val_loss')
+plt.savefig('weights_COCO4_29-03_480x640/loss', format='png')
+
+plt.figure(figsize=(20,12))
+plt.legend(loc='upper right', prop={'size': 24})
 plt.plot(history.history['acc'], label='acc')
 plt.plot(history.history['val_acc'], label='val_acc')
-plt.legend(loc='upper right', prop={'size': 24})
-plt.show(block=True)
+plt.savefig('weights_COCO4_29-03_480x640/acc', format='png')
+
+plt.close()
+
+

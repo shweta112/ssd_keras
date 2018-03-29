@@ -39,7 +39,7 @@ def display_plt(y_pred, output_images):
             current_axis.add_patch(plt.Rectangle((xmin, ymin), xmax-xmin, ymax-ymin, color=color, fill=False, linewidth=2))
             current_axis.text(xmin, ymin, label, size='x-large', color='white', bbox={'facecolor':color, 'alpha':1.0})
 
-        plt.savefig('sample_test/pred/' + '%03d'%int(filenames[i].split('.')[0]) + filenames[i].split('.')[-1], dpi=fig.dpi)
+        plt.savefig('sample_test/pred_27-03_e12/' + '%03d'%int(filenames[i].split('.')[0]), format='png', dpi=fig.dpi)
         plt.close(fig)
 
 
@@ -58,7 +58,7 @@ def display_cv(y_pred, output_images):
 
             cv2.putText(output_images[i], label, (xmin, ymin), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
 
-        cv2.imwrite('sample_test/pred/' + filenames[i], output_images[i])
+        cv2.imwrite('sample_test/pred_27-03_e12/' + '%03d'%int(filenames[i].split('.')[0]), output_images[i])
 
 
 # Set the image size.
@@ -98,7 +98,8 @@ model = ssd_300(image_size=(img_height, img_width, 3),
 
 # 2: Load the trained weights into the model.
 
-weights_path = 'weights_COCO4_17-03/ssd_weights_epoch-05_val_acc-0.9237_val_loss-5.9265.h5'
+# weights_path = 'weights_COCO4_17-03/ssd_weights_epoch-05_val_acc-0.9237_val_loss-5.9265.h5'
+weights_path = 'weights_COCO4_27-03/ssd_weights_epoch-12_val_acc-0.9457_val_loss-6.5008.h5'
 
 model.load_weights(weights_path, by_name=True)
 
