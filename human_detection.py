@@ -87,23 +87,25 @@ val_dataset = BatchGenerator(box_output_format=['class_id', 'xmin', 'ymin', 'xma
 
 # 2: Parse the image and label lists for the training and validation datasets. This can take a while.
 # The directories that contain the images.
-HD_val_images_dir = '../../Human_Detection/images/2017-08-16/16bit'
+HD_08_16_images_dir = '../../Human_Detection/images/2017-08-16/16bit'
 HD_08_29_images_dir = '../../Human_Detection/images/2017-08-29/16bit'
 HD_08_30_images_dir = '../../Human_Detection/images/2017-08-30/16bit'
 
 # The filenames that contain the annotations.
-HD_val_annotation_filename = '../rnd-human-detection/annotations/hd_20170816.json'
+HD_08_16_annotation_filename = '../rnd-human-detection/annotations/hd_20170816.json'
 HD_08_29_annotation_filename = '../rnd-human-detection/annotations/hd_20170829.json'
 HD_08_30_annotation_filename = '../rnd-human-detection/annotations/hd_20170830.json'
 
 train_dataset.parse_custom(images_dirs=[HD_08_29_images_dir,
+                                        HD_08_16_images_dir,
                                         HD_08_30_images_dir],
                            annotations_filenames=[HD_08_29_annotation_filename,
+                                                  HD_08_16_annotation_filename,
                                                   HD_08_30_annotation_filename],
                            ret=False)
 
-val_dataset.parse_custom(images_dirs=[HD_val_images_dir],
-                         annotations_filenames=[HD_val_annotation_filename],
+val_dataset.parse_custom(images_dirs=[HD_08_30_images_dir],
+                         annotations_filenames=[HD_08_30_annotation_filename],
                          ret=False)
 
 # 3: Instantiate an encoder that can encode ground truth labels into the format needed by the SSD loss function.
@@ -163,7 +165,7 @@ val_generator = val_dataset.generate(batch_size=batch_size,
                                      train=True,
                                      ssd_box_encoder=ssd_box_encoder,
                                      convert_to_3_channels=True,
-                                     equalize=False,
+                                     equalize=True,
                                      brightness=False,
                                      flip=False,
                                      translate=False,
@@ -182,44 +184,46 @@ val_generator = val_dataset.generate(batch_size=batch_size,
 n_train_samples = train_dataset.get_n_samples()
 n_val_samples   = val_dataset.get_n_samples()
 
-epochs = 20
+epochs = 50
 
 history = model.fit_generator(generator = train_generator,
                               steps_per_epoch = ceil(n_train_samples/batch_size),
                               epochs = epochs,
                               verbose=1,
-                              callbacks = [ModelCheckpoint('weights_COCO4_29-03_480x640/ssd_weights_epoch-{epoch:02d}_val_acc-{val_acc:.4f}_val_loss-{val_loss:.4f}.h5',
-                                                           monitor='val_acc',
+                              callbacks = [ModelCheckpoint('weights_COCO4_13-04_full/ssd_weights_epoch-{epoch:02d}_acc-{acc:.4f}_loss-{loss:.4f}.h5',
+                                                           monitor='acc',
                                                            verbose=1,
                                                            save_best_only=True,
                                                            save_weights_only=False,
                                                            mode='auto',
                                                            period=1),
-                                           EarlyStopping(monitor='val_acc',
+                                           EarlyStopping(monitor='acc',
                                                          min_delta=0.001,
                                                          patience=201),
                                            LearningRateScheduler(lr_schedule),
                                            CSVLogger('training.log', append=True),
-                                           ReduceLROnPlateau(monitor='val_acc', factor=0.8,
+                                           ReduceLROnPlateau(monitor='acc', factor=0.8,
                                                              patience=200, min_lr=0, verbose=1),
-                                           TensorBoard(log_dir='./logs/SSD480x640_29-03/', histogram_freq=0, batch_size=32,
+                                           TensorBoard(log_dir='./logs/SSD_COCO_14-04_full/', histogram_freq=0, batch_size=32,
                                                        write_graph=True, write_grads=False, write_images=True,
                                                        embeddings_freq=0, embeddings_layer_names=None,
                                                        embeddings_metadata=None)],
-                              validation_data = val_generator,
-                              validation_steps = ceil(n_val_samples/batch_size))
+                              ) # validation_data = val_generator,
+                              # validation_steps = ceil(n_val_samples/batch_size))
 
 plt.figure(figsize=(20,12))
-plt.legend(loc='upper right', prop={'size': 24})
+plt.grid(True)
 plt.plot(history.history['loss'], label='loss')
-plt.plot(history.history['val_loss'], label='val_loss')
-plt.savefig('weights_COCO4_29-03_480x640/loss', format='png')
-
-plt.figure(figsize=(20,12))
+# plt.plot(history.history['val_loss'], label='val_loss')
 plt.legend(loc='upper right', prop={'size': 24})
+plt.savefig('weights_COCO4_13-04_full/loss', format='png')
+plt.cla()
+
+plt.grid(True)
 plt.plot(history.history['acc'], label='acc')
-plt.plot(history.history['val_acc'], label='val_acc')
-plt.savefig('weights_COCO4_29-03_480x640/acc', format='png')
+# plt.plot(history.history['val_acc'], label='val_acc')
+plt.legend(loc='upper right', prop={'size': 24})
+plt.savefig('weights_COCO4_13-04_full/acc', format='png')
 
 plt.close()
 
