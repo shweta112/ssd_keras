@@ -164,6 +164,29 @@ def display_cv(y_pred, output_images):
             cv2.putText(output_images[i], label, (xmin, ymin), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
 
         cv2.imwrite(base_path + folder + filenames[i], output_images[i])
+        
+def bb_intersection_over_union(box_A, box_B):
+	# determine the (x, y)-coordinates of the intersection rectangle
+	x_A = max(box_A[0], box_B[0])
+	y_A = max(box_A[1], box_B[1])
+	x_B = min(box_A[2], box_B[2])
+	y_B = min(box_A[3], box_B[3])
+ 
+	# compute the area of intersection rectangle
+	inter_area = (x_B - x_A + 1) * (y_B - y_A + 1)
+ 
+	# compute the area of both the prediction and ground-truth
+	# rectangles
+	box_A_area = (box_A[2] - box_A[0] + 1) * (box_A[3] - box_A[1] + 1)
+	box_B_area = (boxB_[2] - boxB_[0] + 1) * (boxB_[3] - boxB_[1] + 1)
+ 
+	# compute the intersection over union by taking the intersection
+	# area and dividing it by the sum of prediction + ground-truth
+	# areas - the interesection area
+	iou = inter_area / float(box_A_area + box_B_area - inter_area)
+ 
+	# return the intersection over union value
+	return iou
 
 def save_pred():
     print('Saving predictions...')
