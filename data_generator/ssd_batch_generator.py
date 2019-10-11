@@ -17,6 +17,10 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+Changes by Shweta Mahajan:
+* Added a custom parse function
+* Image loading with OpenCV in generate()
 '''
 
 from __future__ import division
@@ -50,13 +54,13 @@ def _translate(image, horizontal=(0,40), vertical=(0,10)):
 
     Arguments:
         image (array-like): The image to be translated.
-        horizontal (int tuple, optinal): A 2-tuple `(min, max)` with the minimum
+        horizontal (int tuple, optimal): A 2-tuple `(min, max)` with the minimum
             and maximum horizontal translation. A random translation value will
             be picked from a uniform distribution over [min, max].
         vertical (int tuple, optional): Analog to `horizontal`.
 
     Returns:
-        The translated image and the horzontal and vertical shift values.
+        The translated image and the horizontal and vertical shift values.
     '''
     rows,cols,ch = image.shape
 
@@ -100,6 +104,8 @@ def _brightness(image, min=0.5, max=2.0):
 
     Protected against overflow.
     '''
+
+    '''
     hsv = cv2.cvtColor(image,cv2.COLOR_RGB2HSV)
 
     random_br = np.random.uniform(min,max)
@@ -112,6 +118,16 @@ def _brightness(image, min=0.5, max=2.0):
     hsv[:,:,2] = v_channel
 
     return cv2.cvtColor(hsv,cv2.COLOR_HSV2RGB)
+    '''
+    ycc = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
+
+    random_br = np.random.uniform(min, max)
+    mask = ycc[0, :, :] * random_br > (2 ** 16 - 1)
+    y_channel = np.where(mask, (2 ** 16 - 1), ycc[0, :, :] * random_br)
+    ycc[0, :, :] = y_channel
+
+    return cv2.cvtColor(ycc, cv2.COLOR_YCrCb2RGB)
+
 
 def histogram_eq(image):
     '''
@@ -122,11 +138,16 @@ def histogram_eq(image):
 
     image1 = np.copy(image)
 
+    '''
     image1 = cv2.cvtColor(image1, cv2.COLOR_RGB2HSV)
 
     image1[:,:,2] = cv2.equalizeHist(image1[:,:,2])
 
     image1 = cv2.cvtColor(image1, cv2.COLOR_HSV2RGB)
+    '''
+    cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(image1[0, :, :])
+    cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(image1[:, 1, :])
+    cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(image1[:, :, 2])
 
     return image1
 
@@ -586,6 +607,80 @@ class BatchGenerator:
         if ret:
             return self.filenames, self.labels, self.image_ids
 
+    def parse_custom(self,
+                   images_dirs,
+                   annotations_filenames,
+                   ret=False):
+        '''
+        This is a JSON parser for a custom human detection dataset.
+
+        Arguments:
+            images_dirs (list, optional): A list of strings, where each string is the path of a directory that
+                contains images that are to be part of the dataset. This allows you to aggregate multiple datasets
+                into one (e.g. one directory that contains the images for MS COCO Train 2014, another one for MS COCO
+                Val 2014, another one for MS COCO Train 2017 etc.).
+            annotations_filenames (list): A list of strings, where each string is the path of the JSON file
+                that contains the annotations for the images in the respective image directories given, i.e. one
+                JSON file per image directory that contains the annotations for all images in that directory.
+                The content of the JSON files must be in MS COCO object detection format. Note that these annotations
+                files do not necessarily need to contain ground truth information. MS COCO also provides annotations
+                files without ground truth information for the test datasets, called `image_info_[...].json`.
+            include_classes (list, optional): Either 'all' or a list of integers containing the class IDs that
+                are to be included in the dataset. Defaults to 'all', in which case all boxes will be included
+                in the dataset.
+            ret (bool, optional): Whether or not the image filenames and labels are to be returned.
+
+        Returns:
+            None by default, optionally the image filenames and labels.
+        '''
+        self.images_dirs = images_dirs
+        self.annotations_filenames = annotations_filenames
+        # Erase data that might have been parsed before.
+        self.filenames = []
+        self.image_ids = []
+        self.labels = []
+
+        self.classes_to_names = ['background', 'Person'] # A list of the class names with their indices representing the IDs
+
+        # Iterate over all datasets.
+        for images_dir, annotations_filename in zip(self.images_dirs, self.annotations_filenames):
+            # Load the JSON file.
+            with open(annotations_filename, 'r') as f:
+                annotations = json.load(f)
+
+            # Iterate over all images in the dataset.
+            for img in annotations:
+                img_name = img['filename'].split('/')[-1]
+                self.filenames.append(os.path.join(images_dir, img_name))
+                self.image_ids.append(img['filename'])
+
+                boxes = []
+                for annotation in img['annotations']:
+                    # Since the dataset only contains one class, the class ID is always 1 (i.e. 'Person')
+                    class_id = 1
+                    xmin = max(annotation['x'], 0)
+                    ymin = max(annotation['y'], 0)
+                    width = annotation['width']
+                    height = annotation['height']
+                    # Compute `xmax` and `ymax`.
+                    xmax = min(xmin + width, 640)
+                    ymax = min(ymin + height, 480)
+                    item_dict = {'image_id': img['filename'],
+                                 'class_id': class_id,
+                                 'xmin': xmin,
+                                 'ymin': ymin,
+                                 'xmax': xmax,
+                                 'ymax': ymax}
+                    box = []
+                    for item in self.box_output_format:
+                        box.append(item_dict[item])
+                    boxes.append(box)
+                self.labels.append(boxes)
+        # print(len(self.labels))
+        # print(len(self.filenames))
+        if ret:
+            return self.filenames, self.labels, self.image_ids
+
     def save_filenames_and_labels(self, filenames_path='filenames.pkl', labels_path=None, image_ids_path=None):
         '''
         Writes the current `filenames` and `labels` lists to the specified files.
@@ -823,8 +918,11 @@ class BatchGenerator:
 
             # Load the images for this batch.
             for filename in batch_filenames:
-                with Image.open(filename) as img:
-                    batch_X.append(np.array(img))
+                # Using OpenCV for 16 bit grayscale images
+                # with Image.open(filename) as img:
+                #     batch_X.append(np.array(img))
+                img = cv2.imread(filename, -1 | 0)
+                batch_X.append(np.array(img))
 
             # Get the labels for this batch (if there are any).
             if not (self.labels is None):

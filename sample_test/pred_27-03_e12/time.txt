@@ -1,0 +1,4 @@
+DONE (t=17.9339s)
+Time per frame: 0.0485s
+FPS: 20.6313s
+ 
